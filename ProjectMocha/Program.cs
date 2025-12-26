@@ -15,7 +15,7 @@ static void DisplayProjectInfo(Dictionary<string, ProjectInfo> projectReferences
     foreach (var project in projectReferences)
     {
         var info = project.Value;
-        WriteColored($"{project.Key} [{info.ProjectType}] - {info.References.Count} references", GetProjectColor(project.Key, info.ProjectType));
+        WriteWithColor($"{project.Key} [{info.ProjectType}] - {info.References.Count} references", GetProjectColor(project.Key, info.ProjectType));
         
         foreach (var reference in info.References)
         {
@@ -24,7 +24,7 @@ static void DisplayProjectInfo(Dictionary<string, ProjectInfo> projectReferences
     }
 }
 
-static void WriteColored(string text, ConsoleColor color)
+static void WriteWithColor(string text, ConsoleColor color)
 {
     Console.ForegroundColor = color;
     Console.WriteLine(text);
@@ -81,7 +81,7 @@ static Dictionary<string, ProjectInfo> GetAllDotNetProjects(string rootFolder)
 
     foreach (var project in projects)
     {
-        WriteColored($"{Path.GetFileName(project.Key)} [{project.Value.ProjectType}] - {project.Value.References.Count} references", 
+        WriteWithColor($"{Path.GetFileName(project.Key)} [{project.Value.ProjectType}] - {project.Value.References.Count} references", 
                      GetProjectColor(project.Key, project.Value.ProjectType));
     }
 
