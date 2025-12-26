@@ -9,7 +9,124 @@ Dictionary<string, ProjectInfo> projectReferences = GetAllDotNetProjects(folderP
 
 DisplayProjectInfo(projectReferences);
 
+Console.WriteLine();
+DisplayHierarchy(projectReferences);
+
 DisplayLegend();
+
+static void DisplayHierarchy(Dictionary<string, ProjectInfo> projects)
+{
+    // Build a lookup from filename to full path
+    var fileNameToPath = projects.ToDictionary(p => Path.GetFileName(p.Key), p => p.Key);
+    
+    // Build adjacency list using file names
+    var graph = projects.ToDictionary(
+        p => Path.GetFileName(p.Key),
+        p => p.Value.References.ToHashSet());
+    
+    // Compute transitive closure for each node
+    var transitiveClosure = new Dictionary<string, HashSet<string>>();
+    foreach (var node in graph.Keys)
+    {
+        transitiveClosure[node] = GetAllReachable(node, graph);
+    }
+    
+    // Compute minimum references (transitive reduction)
+    var minimalRefs = new Dictionary<string, HashSet<string>>();
+    foreach (var (node, refs) in graph)
+    {
+        var minimal = new HashSet<string>(refs);
+        foreach (var directRef in refs)
+        {
+            // Remove any reference that can be reached through another direct reference
+            foreach (var otherRef in refs)
+            {
+                if (otherRef != directRef && transitiveClosure.GetValueOrDefault(otherRef, []).Contains(directRef))
+                {
+                    minimal.Remove(directRef);
+                    break;
+                }
+            }
+        }
+        minimalRefs[node] = minimal;
+    }
+    
+    // Find root projects (not referenced by anyone)
+    var allReferenced = graph.Values.SelectMany(r => r).ToHashSet();
+    var roots = graph.Keys.Where(k => !allReferenced.Contains(k)).ToList();
+    
+    // Display hierarchy
+    Console.WriteLine("Project Hierarchy (Minimum References):");
+    Console.WriteLine("========================================");
+    
+    var visited = new HashSet<string>();
+    foreach (var root in roots.OrderBy(r => r))
+    {
+        DisplayNode(root, minimalRefs, projects, fileNameToPath, 0, visited);
+    }
+    
+    // Display any orphaned nodes not reachable from roots
+    foreach (var node in graph.Keys.OrderBy(n => n))
+    {
+        if (!visited.Contains(node))
+        {
+            DisplayNode(node, minimalRefs, projects, fileNameToPath, 0, visited);
+        }
+    }
+}
+
+static HashSet<string> GetAllReachable(string start, Dictionary<string, HashSet<string>> graph)
+{
+    var reachable = new HashSet<string>();
+    var queue = new Queue<string>(graph.GetValueOrDefault(start, []));
+    
+    while (queue.Count > 0)
+    {
+        var current = queue.Dequeue();
+        if (reachable.Add(current))
+        {
+            foreach (var next in graph.GetValueOrDefault(current, []))
+            {
+                queue.Enqueue(next);
+            }
+        }
+    }
+    
+    return reachable;
+}
+
+static void DisplayNode(string node, Dictionary<string, HashSet<string>> minimalRefs, 
+    Dictionary<string, ProjectInfo> projects, Dictionary<string, string> fileNameToPath,
+    int indent, HashSet<string> visited)
+{
+    if (!visited.Add(node)) return;
+    
+    var indentStr = new string(' ', indent * 2);
+    var fullPath = fileNameToPath.GetValueOrDefault(node);
+    var info = fullPath != null ? projects.GetValueOrDefault(fullPath) : null;
+    
+    if (info != null && fullPath != null)
+    {
+        var typeColor = GetProjectColor(fullPath, info.ProjectType);
+        var versionColor = GetVersionColor(info.TargetFramework);
+        
+        Console.Write(indentStr);
+        Console.ForegroundColor = typeColor;
+        Console.Write($"{node} [{info.ProjectType}]");
+        Console.ForegroundColor = versionColor;
+        Console.WriteLine($" ({info.TargetFramework})");
+        Console.ResetColor();
+    }
+    else
+    {
+        Console.WriteLine($"{indentStr}{node}");
+    }
+    
+    foreach (var child in minimalRefs.GetValueOrDefault(node, []).OrderBy(c => c))
+    {
+        DisplayNode(child, minimalRefs, projects, fileNameToPath, indent + 1, visited);
+    }
+}
 
 static void DisplayLegend()
 {
