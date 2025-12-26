@@ -7,13 +7,18 @@ string folderPath = @"C:\Users\tzerb\source\repos\ConsoleAppDotNet8"; // Change 
 
 Dictionary<string, List<string>> projectReferences = GetAllDotNetProjects(folderPath);
 
-Console.WriteLine($"Found {projectReferences.Count} .NET projects:");
-foreach (var project in projectReferences)
+DisplayProjectInfo(projectReferences);
+
+static void DisplayProjectInfo(Dictionary<string, List<string>> projectReferences)
 {
-    Console.WriteLine($"{project.Key} - {project.Value.Count} references");
-    foreach (var reference in project.Value)
+    Console.WriteLine($"Found {projectReferences.Count} .NET projects:");
+    foreach (var project in projectReferences)
     {
-        Console.WriteLine($"    -> {reference}");
+        Console.WriteLine($"{project.Key} - {project.Value.Count} references");
+        foreach (var reference in project.Value)
+        {
+            Console.WriteLine($"    -> {reference}");
+        }
     }
 }
 
