@@ -15,10 +15,7 @@ static void DisplayProjectInfo(Dictionary<string, ProjectInfo> projectReferences
     foreach (var project in projectReferences)
     {
         var info = project.Value;
-        var color = GetProjectColor(project.Key, info.ProjectType);
-        Console.ForegroundColor = color;
-        Console.WriteLine($"{project.Key} [{info.ProjectType}] - {info.References.Count} references");
-        Console.ResetColor();
+        WriteColored($"{project.Key} [{info.ProjectType}] - {info.References.Count} references", GetProjectColor(project.Key, info.ProjectType));
         
         foreach (var reference in info.References)
         {
@@ -27,31 +24,27 @@ static void DisplayProjectInfo(Dictionary<string, ProjectInfo> projectReferences
     }
 }
 
-static ConsoleColor GetProjectColor(string projectPath, string projectType)
+static void WriteColored(string text, ConsoleColor color)
 {
-    // Color by project type from inside the file
-    return projectType.ToLower() switch
-    {
-        "exe" => ConsoleColor.Green,
-        "library" => ConsoleColor.Cyan,
-        "winexe" => ConsoleColor.Magenta,
-        "web" => ConsoleColor.Yellow,
-        _ => GetColorByExtension(projectPath)
-    };
+    Console.ForegroundColor = color;
+    Console.WriteLine(text);
+    Console.ResetColor();
 }
 
-static ConsoleColor GetColorByExtension(string projectPath)
+static ConsoleColor GetProjectColor(string path, string type) => type.ToLower() switch
 {
-    // Fallback color by file extension
-    var extension = Path.GetExtension(projectPath).ToLower();
-    return extension switch
+    "exe" => ConsoleColor.Green,
+    "library" => ConsoleColor.Cyan,
+    "winexe" => ConsoleColor.Magenta,
+    "web" => ConsoleColor.Yellow,
+    _ => Path.GetExtension(path).ToLower() switch
     {
         ".csproj" => ConsoleColor.Blue,
         ".vbproj" => ConsoleColor.DarkYellow,
         ".fsproj" => ConsoleColor.DarkCyan,
         _ => ConsoleColor.White
-    };
-}
+    }
+};
 
 static Dictionary<string, ProjectInfo> GetAllDotNetProjects(string rootFolder)
 {
@@ -88,10 +81,8 @@ static Dictionary<string, ProjectInfo> GetAllDotNetProjects(string rootFolder)
 
     foreach (var project in projects)
     {
-        var color = GetProjectColor(project.Key, project.Value.ProjectType);
-        Console.ForegroundColor = color;
-        Console.WriteLine($"{Path.GetFileName(project.Key)} [{project.Value.ProjectType}] - {project.Value.References.Count} references");
-        Console.ResetColor();
+        WriteColored($"{Path.GetFileName(project.Key)} [{project.Value.ProjectType}] - {project.Value.References.Count} references", 
+                     GetProjectColor(project.Key, project.Value.ProjectType));
     }
 
     return projects;
