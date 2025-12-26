@@ -15,6 +15,7 @@ static void DisplayLegend()
 {
     Console.WriteLine();
     Console.WriteLine("Legend:");
+    Console.WriteLine("Project Types:");
     WriteWithColor("  Exe - Console Application", ConsoleColor.Green);
     WriteWithColor("  Library - Class Library", ConsoleColor.Cyan);
     WriteWithColor("  WinExe - Windows Application", ConsoleColor.Magenta);
@@ -22,6 +23,10 @@ static void DisplayLegend()
     WriteWithColor("  .csproj (Unknown) - C# Project", ConsoleColor.Blue);
     WriteWithColor("  .vbproj (Unknown) - VB.NET Project", ConsoleColor.DarkYellow);
     WriteWithColor("  .fsproj (Unknown) - F# Project", ConsoleColor.DarkCyan);
+    Console.WriteLine(".NET Versions:");
+    WriteWithColor("  .NET Framework - Legacy Framework", ConsoleColor.DarkRed);
+    WriteWithColor("  .NET Standard - Cross-platform Library", ConsoleColor.DarkMagenta);
+    WriteWithColor("  .NET Core / .NET 5+ - Modern .NET", ConsoleColor.White);
 }
 
 static void DisplayProjectInfo(Dictionary<string, ProjectInfo> projectReferences)
@@ -30,7 +35,15 @@ static void DisplayProjectInfo(Dictionary<string, ProjectInfo> projectReferences
     foreach (var project in projectReferences)
     {
         var info = project.Value;
-        WriteWithColor($"{project.Key} [{info.ProjectType}] - {info.References.Count} references", GetProjectColor(project.Key, info.ProjectType));
+        var typeColor = GetProjectColor(project.Key, info.ProjectType);
+        var versionColor = GetVersionColor(info.TargetFramework);
+        
+        Console.ForegroundColor = typeColor;
+        Console.Write($"{project.Key} [{info.ProjectType}]");
+        Console.ForegroundColor = versionColor;
+        Console.Write($" ({info.TargetFramework})");
+        Console.ResetColor();
+        Console.WriteLine($" - {info.References.Count} references");
         
         foreach (var reference in info.References)
         {
@@ -59,6 +72,15 @@ static ConsoleColor GetProjectColor(string path, string type) => type.ToLower() 
         ".fsproj" => ConsoleColor.DarkCyan,
         _ => ConsoleColor.White
     }
+};
+
+static ConsoleColor GetVersionColor(string targetFramework) => targetFramework.ToLower() switch
+{
+    var tf when tf.StartsWith("net4") || tf.StartsWith("v4") || tf.StartsWith("v3") || tf.StartsWith("v2") => ConsoleColor.DarkRed,
+    var tf when tf.StartsWith("netstandard") => ConsoleColor.DarkMagenta,
+    var tf when tf.StartsWith("netcoreapp") || tf.StartsWith("net5") || tf.StartsWith("net6") || 
+                tf.StartsWith("net7") || tf.StartsWith("net8") || tf.StartsWith("net9") || tf.StartsWith("net10") => ConsoleColor.White,
+    _ => ConsoleColor.Gray
 };
 
 static Dictionary<string, ProjectInfo> GetAllDotNetProjects(string rootFolder)
@@ -96,8 +118,15 @@ static Dictionary<string, ProjectInfo> GetAllDotNetProjects(string rootFolder)
 
     foreach (var project in projects)
     {
-        WriteWithColor($"{Path.GetFileName(project.Key)} [{project.Value.ProjectType}] - {project.Value.References.Count} references", 
-                     GetProjectColor(project.Key, project.Value.ProjectType));
+        var typeColor = GetProjectColor(project.Key, project.Value.ProjectType);
+        var versionColor = GetVersionColor(project.Value.TargetFramework);
+        
+        Console.ForegroundColor = typeColor;
+        Console.Write($"{Path.GetFileName(project.Key)} [{project.Value.ProjectType}]");
+        Console.ForegroundColor = versionColor;
+        Console.Write($" ({project.Value.TargetFramework})");
+        Console.ResetColor();
+        Console.WriteLine($" - {project.Value.References.Count} references");
     }
 
     return projects;
@@ -107,6 +136,7 @@ static ProjectInfo GetProjectInfo(string projectPath)
 {
     List<string> references = [];
     string projectType = "Unknown";
+    string targetFramework = "Unknown";
 
     try
     {
@@ -138,13 +168,19 @@ static ProjectInfo GetProjectInfo(string projectPath)
                 _ => "Library" // Default for SDK-style without OutputType
             };
         }
+
+        // Determine target framework
+        targetFramework = doc.Descendants("TargetFramework").FirstOrDefault()?.Value
+                       ?? doc.Descendants("TargetFrameworks").FirstOrDefault()?.Value?.Split(';').FirstOrDefault()
+                       ?? doc.Descendants("TargetFrameworkVersion").FirstOrDefault()?.Value
+                       ?? "Unknown";
     }
     catch (Exception ex)
     {
         Console.WriteLine($"Error reading {projectPath}: {ex.Message}");
     }
 
-    return new ProjectInfo(references, projectType);
+    return new ProjectInfo(references, projectType, targetFramework);
 }
 
-record ProjectInfo(List<string> References, string ProjectType);
+record ProjectInfo(List<string> References, string ProjectType, string TargetFramework);
