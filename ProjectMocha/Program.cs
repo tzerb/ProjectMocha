@@ -141,16 +141,20 @@ static ProjectInfo GetProjectInfo(string projectPath)
     try
     {
         var doc = XDocument.Load(projectPath);
+        XNamespace ns = doc.Root?.GetDefaultNamespace() ?? XNamespace.None;
         
-        // Get project references
-        var projectRefs = doc.Descendants("ProjectReference")
+        // Get project references (check both with and without namespace)
+        var projectRefs = doc.Descendants(ns + "ProjectReference")
+                             .Concat(doc.Descendants("ProjectReference"))
                              .Select(pr => pr.Attribute("Include")?.Value)
                              .Where(val => val != null)
+                             .Distinct()
                              .Cast<string>();
         references.AddRange(projectRefs.Select(Path.GetFileName)!);
 
-        // Determine project type
-        var outputType = doc.Descendants("OutputType").FirstOrDefault()?.Value;
+        // Determine project type (check both with and without namespace)
+        var outputType = doc.Descendants(ns + "OutputType").FirstOrDefault()?.Value
+                      ?? doc.Descendants("OutputType").FirstOrDefault()?.Value;
         var sdk = doc.Root?.Attribute("Sdk")?.Value;
 
         if (!string.IsNullOrEmpty(outputType))
@@ -169,9 +173,10 @@ static ProjectInfo GetProjectInfo(string projectPath)
             };
         }
 
-        // Determine target framework
+        // Determine target framework (check both SDK-style and legacy formats)
         targetFramework = doc.Descendants("TargetFramework").FirstOrDefault()?.Value
                        ?? doc.Descendants("TargetFrameworks").FirstOrDefault()?.Value?.Split(';').FirstOrDefault()
+                       ?? doc.Descendants(ns + "TargetFrameworkVersion").FirstOrDefault()?.Value
                        ?? doc.Descendants("TargetFrameworkVersion").FirstOrDefault()?.Value
                        ?? "Unknown";
     }
