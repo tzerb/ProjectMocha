@@ -5,26 +5,57 @@ Console.WriteLine("Hello, World!");
 
 string folderPath = @"C:\Users\tzerb\source\repos\ConsoleAppDotNet8"; // Change this to your target folder
 
-Dictionary<string, List<string>> projectReferences = GetAllDotNetProjects(folderPath);
+Dictionary<string, ProjectInfo> projectReferences = GetAllDotNetProjects(folderPath);
 
 DisplayProjectInfo(projectReferences);
 
-static void DisplayProjectInfo(Dictionary<string, List<string>> projectReferences)
+static void DisplayProjectInfo(Dictionary<string, ProjectInfo> projectReferences)
 {
     Console.WriteLine($"Found {projectReferences.Count} .NET projects:");
     foreach (var project in projectReferences)
     {
-        Console.WriteLine($"{project.Key} - {project.Value.Count} references");
-        foreach (var reference in project.Value)
+        var info = project.Value;
+        var color = GetProjectColor(project.Key, info.ProjectType);
+        Console.ForegroundColor = color;
+        Console.WriteLine($"{project.Key} [{info.ProjectType}] - {info.References.Count} references");
+        Console.ResetColor();
+        
+        foreach (var reference in info.References)
         {
             Console.WriteLine($"    -> {reference}");
         }
     }
 }
 
-static Dictionary<string, List<string>> GetAllDotNetProjects(string rootFolder)
+static ConsoleColor GetProjectColor(string projectPath, string projectType)
 {
-    Dictionary<string, List<string>> projects = [];
+    // Color by project type from inside the file
+    return projectType.ToLower() switch
+    {
+        "exe" => ConsoleColor.Green,
+        "library" => ConsoleColor.Cyan,
+        "winexe" => ConsoleColor.Magenta,
+        "web" => ConsoleColor.Yellow,
+        _ => GetColorByExtension(projectPath)
+    };
+}
+
+static ConsoleColor GetColorByExtension(string projectPath)
+{
+    // Fallback color by file extension
+    var extension = Path.GetExtension(projectPath).ToLower();
+    return extension switch
+    {
+        ".csproj" => ConsoleColor.Blue,
+        ".vbproj" => ConsoleColor.DarkYellow,
+        ".fsproj" => ConsoleColor.DarkCyan,
+        _ => ConsoleColor.White
+    };
+}
+
+static Dictionary<string, ProjectInfo> GetAllDotNetProjects(string rootFolder)
+{
+    Dictionary<string, ProjectInfo> projects = [];
 
     if (!Directory.Exists(rootFolder))
     {
@@ -41,8 +72,8 @@ static Dictionary<string, List<string>> GetAllDotNetProjects(string rootFolder)
             var files = Directory.EnumerateFiles(rootFolder, extension, SearchOption.AllDirectories);
             foreach (var file in files)
             {
-                var references = GetProjectReferences(file);
-                projects[file] = references;
+                var info = GetProjectInfo(file);
+                projects[file] = info;
             }
         }
         catch (UnauthorizedAccessException ex)
@@ -57,30 +88,57 @@ static Dictionary<string, List<string>> GetAllDotNetProjects(string rootFolder)
 
     foreach (var project in projects)
     {
-        Console.WriteLine($"{Path.GetFileName(project.Key)} - {project.Value.Count} references");
+        var color = GetProjectColor(project.Key, project.Value.ProjectType);
+        Console.ForegroundColor = color;
+        Console.WriteLine($"{Path.GetFileName(project.Key)} [{project.Value.ProjectType}] - {project.Value.References.Count} references");
+        Console.ResetColor();
     }
 
     return projects;
 }
 
-static List<string> GetProjectReferences(string projectPath)
+static ProjectInfo GetProjectInfo(string projectPath)
 {
     List<string> references = [];
+    string projectType = "Unknown";
 
     try
     {
         var doc = XDocument.Load(projectPath);
+        
+        // Get project references
         var projectRefs = doc.Descendants("ProjectReference")
                              .Select(pr => pr.Attribute("Include")?.Value)
                              .Where(val => val != null)
                              .Cast<string>();
-
         references.AddRange(projectRefs.Select(Path.GetFileName)!);
+
+        // Determine project type
+        var outputType = doc.Descendants("OutputType").FirstOrDefault()?.Value;
+        var sdk = doc.Root?.Attribute("Sdk")?.Value;
+
+        if (!string.IsNullOrEmpty(outputType))
+        {
+            projectType = outputType;
+        }
+        else if (sdk != null)
+        {
+            // SDK-style projects default based on SDK
+            projectType = sdk switch
+            {
+                "Microsoft.NET.Sdk.Web" => "Web",
+                "Microsoft.NET.Sdk.Worker" => "Exe",
+                "Microsoft.NET.Sdk.BlazorWebAssembly" => "Web",
+                _ => "Library" // Default for SDK-style without OutputType
+            };
+        }
     }
     catch (Exception ex)
     {
         Console.WriteLine($"Error reading {projectPath}: {ex.Message}");
     }
 
-    return references;
+    return new ProjectInfo(references, projectType);
 }
+
+record ProjectInfo(List<string> References, string ProjectType);
