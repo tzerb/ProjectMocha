@@ -9,6 +9,21 @@ Dictionary<string, ProjectInfo> projectReferences = GetAllDotNetProjects(folderP
 
 DisplayProjectInfo(projectReferences);
 
+DisplayLegend();
+
+static void DisplayLegend()
+{
+    Console.WriteLine();
+    Console.WriteLine("Legend:");
+    WriteWithColor("  Exe - Console Application", ConsoleColor.Green);
+    WriteWithColor("  Library - Class Library", ConsoleColor.Cyan);
+    WriteWithColor("  WinExe - Windows Application", ConsoleColor.Magenta);
+    WriteWithColor("  Web - Web Application", ConsoleColor.Yellow);
+    WriteWithColor("  .csproj (Unknown) - C# Project", ConsoleColor.Blue);
+    WriteWithColor("  .vbproj (Unknown) - VB.NET Project", ConsoleColor.DarkYellow);
+    WriteWithColor("  .fsproj (Unknown) - F# Project", ConsoleColor.DarkCyan);
+}
+
 static void DisplayProjectInfo(Dictionary<string, ProjectInfo> projectReferences)
 {
     Console.WriteLine($"Found {projectReferences.Count} .NET projects:");
