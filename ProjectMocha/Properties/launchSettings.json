@@ -2,7 +2,8 @@
   "profiles": {
     "ProjectMocha": {
       "commandName": "Project",
-      "commandLineArgs": "\"C:\\Users\\tzerb\\source\\repos\\ProgrammedTools\""
+      //"commandLineArgs": "\"C:\\Users\\tzerb\\source\\repos\\ProgrammedTools\""
+      "commandLineArgs": "\"C:\\Users\\tzerb\\source\\repos\\ConsoleAppDotNet8\""
     }
   }
 }

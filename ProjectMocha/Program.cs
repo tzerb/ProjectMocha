@@ -1,4 +1,5 @@
 ﻿using System.Xml.Linq;
+using System.Diagnostics;
 
 string folderPath = args.Length > 0 
     ? args[0] 
@@ -17,8 +18,198 @@ DisplayProjectInfo(projectReferences);
 
 Console.WriteLine();
 DisplayHierarchy(projectReferences);
-
 DisplayLegend();
+DisplayHierarchyMenu(projectReferences, folderPath);
+
+static void DisplayHierarchyMenu(Dictionary<string, ProjectInfo> projects, string rootFolder)
+{
+    // Build a lookup from filename to full path
+    var fileNameToPath = projects.ToDictionary(p => Path.GetFileName(p.Key), p => p.Key);
+    
+    // Sort all projects by number of references ascending
+    var sortedProjects = projects
+        .OrderBy(p => p.Value.References.Count)
+        .ThenBy(p => Path.GetFileName(p.Key))
+        .ToList();
+
+    if (sortedProjects.Count == 0)
+    {
+        Console.WriteLine("No projects found.");
+        return;
+    }
+
+    int selectedIndex = 0;
+    bool running = true;
+
+    while (running)
+    {
+        Console.Clear();
+        Console.WriteLine("All Projects (sorted by reference count ascending):");
+        Console.WriteLine("===================================================");
+        Console.WriteLine("Use ↑/↓ to navigate, 'S' to create solution, 'Q' to quit");
+        Console.WriteLine();
+
+        for (int i = 0; i < sortedProjects.Count; i++)
+        {
+            var project = sortedProjects[i];
+            var info = project.Value;
+            var fileName = Path.GetFileName(project.Key);
+            var typeColor = GetProjectColor(project.Key, info.ProjectType);
+            var versionColor = GetVersionColor(info.TargetFramework);
+
+            if (i == selectedIndex)
+            {
+                Console.BackgroundColor = ConsoleColor.DarkGray;
+                Console.Write("► ");
+            }
+            else
+            {
+                Console.Write("  ");
+            }
+
+            Console.ForegroundColor = typeColor;
+            Console.Write($"{fileName} [{info.ProjectType}]");
+            Console.ForegroundColor = versionColor;
+            Console.Write($" ({info.TargetFramework})");
+            Console.ResetColor();
+            
+            if (i == selectedIndex)
+            {
+                Console.BackgroundColor = ConsoleColor.DarkGray;
+            }
+            Console.WriteLine($" - {info.References.Count} references");
+            Console.ResetColor();
+
+            foreach (var reference in info.References.OrderBy(r => r))
+            {
+                Console.WriteLine($"      -> {reference}");
+            }
+        }
+
+        var key = Console.ReadKey(true);
+        switch (key.Key)
+        {
+            case ConsoleKey.UpArrow:
+                selectedIndex = (selectedIndex - 1 + sortedProjects.Count) % sortedProjects.Count;
+                break;
+            case ConsoleKey.DownArrow:
+                selectedIndex = (selectedIndex + 1) % sortedProjects.Count;
+                break;
+            case ConsoleKey.S:
+                CreateSolutionForProject(sortedProjects[selectedIndex], projects, fileNameToPath, rootFolder);
+                Console.WriteLine("\nPress any key to continue...");
+                Console.ReadKey(true);
+                break;
+            case ConsoleKey.Q:
+                running = false;
+                break;
+        }
+    }
+}
+
+static void CreateSolutionForProject(KeyValuePair<string, ProjectInfo> selectedProject, 
+    Dictionary<string, ProjectInfo> allProjects,
+    Dictionary<string, string> fileNameToPath,
+    string rootFolder)
+{
+    var projectMochaFolder = Path.Combine(rootFolder, ".ProjectMocha");
+    
+    // Create folder if it doesn't exist
+    if (!Directory.Exists(projectMochaFolder))
+    {
+        Directory.CreateDirectory(projectMochaFolder);
+        Console.WriteLine($"Created folder: {projectMochaFolder}");
+    }
+
+    var selectedFileName = Path.GetFileName(selectedProject.Key);
+    var solutionName = Path.GetFileNameWithoutExtension(selectedFileName) + ".sln";
+    var solutionPath = Path.Combine(projectMochaFolder, solutionName);
+
+    // Get all referenced projects (transitive)
+    var allReferencedProjects = GetAllReferencedProjects(selectedFileName, allProjects, fileNameToPath);
+    allReferencedProjects.Add(selectedProject.Key); // Include the selected project itself
+
+    // Delete existing solution if it exists
+    if (File.Exists(solutionPath))
+    {
+        File.Delete(solutionPath);
+    }
+
+    // Create solution using dotnet CLI
+    Console.WriteLine($"\nCreating solution: {solutionPath}");
+    RunDotNetCommand($"new sln -n {Path.GetFileNameWithoutExtension(solutionName)} -o \"{projectMochaFolder}\"");
+
+    // Add each project to the solution
+    Console.WriteLine($"Adding {allReferencedProjects.Count} project(s):");
+    foreach (var proj in allReferencedProjects.OrderBy(p => p))
+    {
+        Console.WriteLine($"  - {Path.GetFileName(proj)}");
+        RunDotNetCommand($"sln \"{solutionPath}\" add \"{proj}\"");
+    }
+    
+    Console.WriteLine($"\nSolution created successfully: {solutionPath}");
+}
+
+static void RunDotNetCommand(string arguments)
+{
+    var process = new Process
+    {
+        StartInfo = new ProcessStartInfo
+        {
+            FileName = "dotnet",
+            Arguments = arguments,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        }
+    };
+    
+    process.Start();
+    process.WaitForExit();
+    
+    if (process.ExitCode != 0)
+    {
+        var error = process.StandardError.ReadToEnd();
+        Console.WriteLine($"Error: {error}");
+    }
+}
+
+static HashSet<string> GetAllReferencedProjects(string projectFileName, 
+    Dictionary<string, ProjectInfo> allProjects,
+    Dictionary<string, string> fileNameToPath)
+{
+    var result = new HashSet<string>();
+    var queue = new Queue<string>();
+    
+    // Get the full path and its references
+    if (fileNameToPath.TryGetValue(projectFileName, out var fullPath))
+    {
+        var info = allProjects[fullPath];
+        foreach (var reference in info.References)
+        {
+            queue.Enqueue(reference);
+        }
+    }
+
+    while (queue.Count > 0)
+    {
+        var current = queue.Dequeue();
+        if (fileNameToPath.TryGetValue(current, out var currentFullPath))
+        {
+            if (result.Add(currentFullPath))
+            {
+                var info = allProjects[currentFullPath];
+                foreach (var reference in info.References)
+                {
+                    queue.Enqueue(reference);
+                }
+            }
+        }
+    }
+
+    return result;
+}
 
 static void DisplayHierarchy(Dictionary<string, ProjectInfo> projects)
 {
