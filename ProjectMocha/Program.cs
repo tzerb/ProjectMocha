@@ -1,8 +1,5 @@
 ﻿using System.Xml.Linq;
 
-// See https://aka.ms/new-console-template for more information
-Console.WriteLine("Hello, Worldint!");
-
 string folderPath = args.Length > 0 
     ? args[0] 
     : @"C:\Users\tzerb\source\repos\ConsoleAppDotNet8";

@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "ProjectMocha": {
+      "commandName": "Project",
+      "commandLineArgs": "\"C:\\Users\\tzerb\\source\\repos\\ProgrammedTools\""
+    }
+  }
+}
