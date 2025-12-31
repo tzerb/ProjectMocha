@@ -49,7 +49,59 @@ static void DisplayHierarchyMenu(Dictionary<string, ProjectInfo> projects, strin
         Console.WriteLine("Use ↑/↓ to navigate, 'S' to create solution, 'Q' to quit");
         Console.WriteLine();
 
-        for (int i = 0; i < sortedProjects.Count; i++)
+        // Calculate visible window
+        int consoleHeight = Console.WindowHeight;
+        int headerLines = 5; // Lines used by header
+        int maxVisibleLines = consoleHeight - headerLines - 2; // Leave some buffer
+        
+        // Calculate which projects to show
+        int startIndex = 0;
+        int endIndex = sortedProjects.Count;
+        
+        // Calculate total lines needed for all projects
+        var projectLineCounts = sortedProjects.Select(p => 1 + p.Value.References.Count).ToList();
+        
+        // Find the range of projects to display, centered around selected
+        int linesBeforeSelected = 0;
+        for (int i = 0; i < selectedIndex; i++)
+        {
+            linesBeforeSelected += projectLineCounts[i];
+        }
+        
+        int selectedProjectLines = projectLineCounts[selectedIndex];
+        
+        // Determine start index - try to show some context before selected
+        int targetLinesAbove = maxVisibleLines / 3;
+        int currentLines = 0;
+        startIndex = selectedIndex;
+        
+        while (startIndex > 0 && currentLines + projectLineCounts[startIndex - 1] < targetLinesAbove)
+        {
+            startIndex--;
+            currentLines += projectLineCounts[startIndex];
+        }
+        
+        // Determine end index - fill remaining space
+        currentLines = 0;
+        for (int i = startIndex; i <= selectedIndex; i++)
+        {
+            currentLines += projectLineCounts[i];
+        }
+        
+        endIndex = selectedIndex + 1;
+        while (endIndex < sortedProjects.Count && currentLines + projectLineCounts[endIndex] < maxVisibleLines)
+        {
+            currentLines += projectLineCounts[endIndex];
+            endIndex++;
+        }
+
+        // Show scroll indicators
+        if (startIndex > 0)
+        {
+            Console.WriteLine($"  ↑ ({startIndex} more above)");
+        }
+
+        for (int i = startIndex; i < endIndex; i++)
         {
             var project = sortedProjects[i];
             var info = project.Value;
@@ -84,6 +136,12 @@ static void DisplayHierarchyMenu(Dictionary<string, ProjectInfo> projects, strin
             {
                 Console.WriteLine($"      -> {reference}");
             }
+        }
+
+        // Show scroll indicator at bottom
+        if (endIndex < sortedProjects.Count)
+        {
+            Console.WriteLine($"  ↓ ({sortedProjects.Count - endIndex} more below)");
         }
 
         var key = Console.ReadKey(true);
